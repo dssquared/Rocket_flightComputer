@@ -1,5 +1,9 @@
 *.cppproj
 *.xml
 *__
+*.atsln
+*.vs
+*__vm/
+*.vs/
 /Debug
 /Release
