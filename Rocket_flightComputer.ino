@@ -65,13 +65,19 @@ void setup()
   
   Serial.println("Calculating ground level\n");
   */
+  gndLevelOne = (bmp.readAltitude(baroPres) * 3.28);
+  delay(500);
+  gndLevelTwo = (bmp.readAltitude(baroPres) * 3.28);
+  delay(500);
+  gndLevelThree = (bmp.readAltitude(baroPres) * 3.28);
+  delay(500);
   for (i = 0; i <= 5; i++)
   {
-    gndLevelOne = (bmp.readAltitude(baroPres) * 3.28);
+    gndLevelOne = (gndLevelOne + (bmp.readAltitude(baroPres) * 3.28)) /2;
     delay(500);
-    gndLevelTwo = (bmp.readAltitude(baroPres) * 3.28);
+    gndLevelTwo = (gndLevelTwo + (bmp.readAltitude(baroPres) * 3.28)) /2;
     delay(500);
-    gndLevelThree = (bmp.readAltitude(baroPres) * 3.28);
+    gndLevelThree = (gndLevelThree + (bmp.readAltitude(baroPres) * 3.28)) /2;
     delay(500);
   }
   
@@ -138,7 +144,7 @@ void loop()
     EEPROM.write(1, lowByte(altDrogueAGL));
   }
  
-  if ((bmp.readAltitude(baroPres) * 3.28) <= mainDeployAlt  && (!mainDeployed)  && (drogueDeployed))
+  if (((bmp.readAltitude(baroPres) * 3.28) <= mainDeployAlt)  && (!mainDeployed)  && (drogueDeployed))
   {
     digitalWrite(MAIN, HIGH);
     delay(1000);
