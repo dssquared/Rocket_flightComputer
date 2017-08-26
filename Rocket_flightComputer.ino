@@ -34,9 +34,12 @@ float gndLevelOne;
 float gndLevelTwo;
 float gndLevelThree;
 float gndLevelAvg;
-float mainDeploy;
+float mainDeployAlt;
 int altDrogue, altMain, altDrogueAGL, altMainAGL;
-int i, k = 0, launch = 0;
+uint8_t i = 0;
+uint8_t launch = 0;
+uint8_t drogueDeployed = 0;
+uint8_t mainDeployed = 0;
 unsigned char values[10];
 
 void setup()
@@ -79,10 +82,10 @@ void setup()
   Serial.print(" feet");
   Serial.println("\n\n");
   */
-  mainDeploy = gndLevelAvg + MAIN_LEVEL;
+  mainDeployAlt = gndLevelAvg + MAIN_LEVEL;
   /*
   Serial.print("Main set to deploy at ");
-  Serial.print(mainDeploy);
+  Serial.print(mainDeployAlt);
   Serial.print(" feet, ");
   Serial.print(MAIN_LEVEL);
   Serial.print(" feet AGL.");
@@ -95,10 +98,8 @@ void setup()
     EEPROM.write(i, 0);
   }
   //Serial.println("EEPROM cleared");
-  //delay(1000);
-  attachInterrupt(0, takeOff, RISING);
+  //delay(500);
   //Serial.print("Initializing Accelerometer\n");
-  //delay(2000);
   writeRegister(INT_MAP, 0xEF);
   writeRegister(ACT_INACT_CTL, 0x40);  //0x40 dc coupled with x-axis only participating in activity
   writeRegister(THRESH_ACT, 0x7F);   //0x3F =3.94gs  0x7f =7.94gs
@@ -107,14 +108,15 @@ void setup()
   writeRegister(POWER_CTL, 0x08);
   readRegister(INT_SOURCE, 1, values);
   //Serial.print("Accelerometer Ready!!\n");
-  //delay(1000);
+  //delay(500);
+  attachInterrupt(0, takeOff, RISING);
   digitalWrite(LEDPIN, HIGH);
   //Serial.println("All systems GO!! Stand by for liftoff!!\n");
-}
+}  // end setup()
 
 void loop()
-{
-  if(launch == 1)
+{	
+  if((!drogueDeployed) && (launch))
   {
     digitalWrite(LEDPIN, LOW);
     //Serial.print("Launch detected\n");
@@ -123,6 +125,7 @@ void loop()
     digitalWrite(DROGUE, HIGH);
     delay(1000);
     digitalWrite(DROGUE, LOW);
+	drogueDeployed = 1;
     altDrogue = (bmp.readAltitude(baroPres) * 3.28);
     //Serial.print("Drogue deployed at ");
     //Serial.print(altDrogue);
@@ -130,16 +133,17 @@ void loop()
     altDrogueAGL = altDrogue - gndLevelAvg;
     //Serial.print(altDrogueAGL);
     //Serial.print(" feet AGL\n\n");
-    launch = 2;                     //  **** put accelerometer to sleep ****
+    //  ??? put accelerometer to sleep ???
     EEPROM.write(0, highByte(altDrogueAGL));
     EEPROM.write(1, lowByte(altDrogueAGL));
   }
  
-  if ((bmp.readAltitude(baroPres) * 3.28) <= mainDeploy  && (k < 1)  && (launch == 2))
+  if ((bmp.readAltitude(baroPres) * 3.28) <= mainDeployAlt  && (!mainDeployed)  && (drogueDeployed))
   {
     digitalWrite(MAIN, HIGH);
     delay(1000);
     digitalWrite(MAIN, LOW);
+	mainDeployed = 1;
     altMain = (bmp.readAltitude(baroPres) * 3.28);
     //Serial.print("Main deployed at ");
     //Serial.print(altMain);
@@ -149,9 +153,8 @@ void loop()
     //Serial.print(" feet AGL");
     EEPROM.write(2, highByte(altMainAGL));
     EEPROM.write(3, lowByte(altMainAGL));
-    k++;
   }
-}
+}  // end loop()
 
 void writeRegister(char registerAddress, char value)
 {
