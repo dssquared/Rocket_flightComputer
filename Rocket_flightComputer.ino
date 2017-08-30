@@ -29,7 +29,7 @@ Adafruit_BMP085 bmp;
 #define LEDPIN 3    //indicator LED
 #define CS 10       //chip select pin for SPI
 
-float baroPres = 101480;   //***SET BEFORE EACH PROGRAM**** current barometric pressue in Pascals(ie 1015 millibars = 101500 pascals)
+float baroPres = 101630;   //***SET BEFORE EACH PROGRAM**** current barometric pressue in Pascals(ie 1015 millibars = 101500 pascals)
 float gndLevelOne;
 float gndLevelTwo;
 float gndLevelThree;
@@ -40,6 +40,7 @@ uint8_t i = 0;
 uint8_t launch = 0;
 uint8_t drogueDeployed = 0;
 uint8_t mainDeployed = 0;
+uint8_t n = 0;  // var for end of flight counter to test if watchdog kicks in, we don't want the watchdog to reset cpu
 unsigned char values[10];
 
 void setup()
@@ -51,9 +52,9 @@ void setup()
   
   SPI.begin();
   SPI.setDataMode(SPI_MODE3);
-  //Serial.begin(9600);
+  Serial.begin(9600);
   digitalWrite(CS, HIGH);
-  /*
+  
   Serial.println("Initializing Altimeter.");
   if (!bmp.begin())
   {
@@ -64,7 +65,7 @@ void setup()
   delay(1000);
   
   Serial.println("Calculating ground level\n");
-  */
+  
   gndLevelOne = (bmp.readAltitude(baroPres) * 3.28);
   delay(500);
   gndLevelTwo = (bmp.readAltitude(baroPres) * 3.28);
@@ -82,30 +83,42 @@ void setup()
   }
   
   gndLevelAvg = (gndLevelOne + gndLevelTwo + gndLevelThree) / 3;
-  /*
+  
+  Serial.print("GL 1 = ");
+  Serial.println(gndLevelOne);
+  Serial.print("GL 2 = ");
+  Serial.println(gndLevelTwo);
+  Serial.print("GL 3 = ");
+  Serial.println(gndLevelThree);
+  
   Serial.print("Ground level = ");
   Serial.print(gndLevelAvg);
   Serial.print(" feet");
   Serial.println("\n\n");
-  */
+  
   mainDeployAlt = gndLevelAvg + MAIN_LEVEL;
-  /*
+  
   Serial.print("Main set to deploy at ");
   Serial.print(mainDeployAlt);
   Serial.print(" feet, ");
   Serial.print(MAIN_LEVEL);
   Serial.print(" feet AGL.");
   Serial.println("\n\n");
-  */
   
-  //Serial.println("Clearing EEPROM");
-  for (i = 0; i < 1024; i++)
+  /*
+  Serial.println("Clearing EEPROM");
+  for (int j = 0; j < EEPROM.length(); j++)
   {
-    EEPROM.write(i, 0);
+	Serial.println("before eeprom write...");
+    EEPROM.write(j, 0);
+	Serial.println("After eeprom write: ");
+	Serial.print("j is: ");
+	Serial.println(j);
   }
-  //Serial.println("EEPROM cleared");
-  //delay(500);
-  //Serial.print("Initializing Accelerometer\n");
+  Serial.println("EEPROM cleared");
+  */
+  delay(500);
+  Serial.print("Initializing Accelerometer\n");
   writeRegister(INT_MAP, 0xEF);
   writeRegister(ACT_INACT_CTL, 0x40);  //0x40 dc coupled with x-axis only participating in activity
   writeRegister(THRESH_ACT, 0x7F);   //0x3F =3.94gs  0x7f =7.94gs
@@ -113,11 +126,11 @@ void setup()
   writeRegister(INT_ENABLE, 0x90);
   writeRegister(POWER_CTL, 0x08);
   readRegister(INT_SOURCE, 1, values);
-  //Serial.print("Accelerometer Ready!!\n");
-  //delay(500);
+  Serial.print("Accelerometer Ready!!\n");
+  delay(500);
   attachInterrupt(0, takeOff, RISING);
   digitalWrite(LEDPIN, HIGH);
-  //Serial.println("All systems GO!! Stand by for liftoff!!\n");
+  Serial.println("All systems GO!! Stand by for liftoff!!\n");
 }  // end setup()
 
 void loop()
@@ -125,7 +138,7 @@ void loop()
   if((!drogueDeployed) && (launch))
   {
     digitalWrite(LEDPIN, LOW);
-    //Serial.print("Launch detected\n");
+    Serial.print("Launch detected\n");
     detachInterrupt(0);
     delay(DELAY_PERIOD);
     digitalWrite(DROGUE, HIGH);
@@ -133,12 +146,12 @@ void loop()
     digitalWrite(DROGUE, LOW);
 	drogueDeployed = 1;
     altDrogue = (bmp.readAltitude(baroPres) * 3.28);
-    //Serial.print("Drogue deployed at ");
-    //Serial.print(altDrogue);
-    //Serial.print(" feet\n");
+    Serial.print("Drogue deployed at ");
+    Serial.print(altDrogue);
+    Serial.print(" feet\n");
     altDrogueAGL = altDrogue - gndLevelAvg;
-    //Serial.print(altDrogueAGL);
-    //Serial.print(" feet AGL\n\n");
+    Serial.print(altDrogueAGL);
+    Serial.print(" feet AGL\n\n");
     //  ??? put accelerometer to sleep ???
     EEPROM.write(0, highByte(altDrogueAGL));
     EEPROM.write(1, lowByte(altDrogueAGL));
@@ -151,14 +164,21 @@ void loop()
     digitalWrite(MAIN, LOW);
 	mainDeployed = 1;
     altMain = (bmp.readAltitude(baroPres) * 3.28);
-    //Serial.print("Main deployed at ");
-    //Serial.print(altMain);
-    //Serial.println(" feet");
+    Serial.print("Main deployed at ");
+    Serial.print(altMain);
+    Serial.println(" feet");
     altMainAGL = altMain - gndLevelAvg;
-    //Serial.print(altMainAGL);
-    //Serial.print(" feet AGL");
+    Serial.print(altMainAGL);
+    Serial.print(" feet AGL");
     EEPROM.write(2, highByte(altMainAGL));
     EEPROM.write(3, lowByte(altMainAGL));
+  }
+  
+  while(mainDeployed){
+	  Serial.println("beep...");
+	  delay(10000);
+	  n++;
+	  Serial.println(n);
   }
 }  // end loop()
 
