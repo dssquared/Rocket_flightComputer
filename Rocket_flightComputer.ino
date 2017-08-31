@@ -29,7 +29,7 @@ Adafruit_BMP085 bmp;
 #define LEDPIN 3    //indicator LED
 #define CS 10       //chip select pin for SPI
 
-float baroPres = 101630;   //***SET BEFORE EACH PROGRAM**** current barometric pressue in Pascals(ie 1015 millibars = 101500 pascals)
+float baroPres = 101625;   //***SET BEFORE EACH PROGRAM**** current barometric pressue in Pascals(ie 1015 millibars = 101500 pascals)
 float gndLevelOne;
 float gndLevelTwo;
 float gndLevelThree;
@@ -66,19 +66,19 @@ void setup()
   
   Serial.println("Calculating ground level\n");
   
-  gndLevelOne = (bmp.readAltitude(baroPres) * 3.28);
+  gndLevelOne = currentAlt();
   delay(500);
-  gndLevelTwo = (bmp.readAltitude(baroPres) * 3.28);
+  gndLevelTwo = currentAlt();
   delay(500);
-  gndLevelThree = (bmp.readAltitude(baroPres) * 3.28);
+  gndLevelThree = currentAlt();
   delay(500);
-  for (i = 0; i <= 5; i++)
+  for (i = 0; i <= 10; i++)
   {
-    gndLevelOne = (gndLevelOne + (bmp.readAltitude(baroPres) * 3.28)) /2;
+    gndLevelOne = (gndLevelOne + currentAlt()) /2;
     delay(500);
-    gndLevelTwo = (gndLevelTwo + (bmp.readAltitude(baroPres) * 3.28)) /2;
+    gndLevelTwo = (gndLevelTwo + currentAlt()) /2;
     delay(500);
-    gndLevelThree = (gndLevelThree + (bmp.readAltitude(baroPres) * 3.28)) /2;
+    gndLevelThree = (gndLevelThree + currentAlt()) /2;
     delay(500);
   }
   
@@ -145,7 +145,7 @@ void loop()
     delay(1000);
     digitalWrite(DROGUE, LOW);
 	drogueDeployed = 1;
-    altDrogue = (bmp.readAltitude(baroPres) * 3.28);
+    altDrogue = currentAlt();
     Serial.print("Drogue deployed at ");
     Serial.print(altDrogue);
     Serial.print(" feet\n");
@@ -157,13 +157,13 @@ void loop()
     EEPROM.write(1, lowByte(altDrogueAGL));
   }
  
-  if (((bmp.readAltitude(baroPres) * 3.28) <= mainDeployAlt)  && (!mainDeployed)  && (drogueDeployed))
+  if ((currentAlt() <= mainDeployAlt)  && (!mainDeployed)  && (drogueDeployed))
   {
     digitalWrite(MAIN, HIGH);
     delay(1000);
     digitalWrite(MAIN, LOW);
 	mainDeployed = 1;
-    altMain = (bmp.readAltitude(baroPres) * 3.28);
+    altMain = currentAlt();
     Serial.print("Main deployed at ");
     Serial.print(altMain);
     Serial.println(" feet");
@@ -182,6 +182,10 @@ void loop()
   }
 }  // end loop()
 
+float currentAlt()
+{
+	return (bmp.readAltitude(baroPres) * 3.28);
+}
 void writeRegister(char registerAddress, char value)
 {
   digitalWrite(CS, LOW);
