@@ -29,6 +29,13 @@ Adafruit_BMP085 bmp;
 #define LEDPIN 3    //indicator LED
 #define CS 10       //chip select pin for SPI
 
+#define N_MORSE  (sizeof(morsetab)/sizeof(morsetab[0]))
+#define SPEED  (13)
+#define txpin    (13)
+#define DOTLEN  (1200/SPEED)
+#define DASHLEN  (3*(1200/SPEED))
+
+
 float baroPres = 101625;   //***SET BEFORE EACH PROGRAM**** current barometric pressue in Pascals(ie 1015 millibars = 101500 pascals)
 float gndLevelOne;
 float gndLevelTwo;
@@ -36,12 +43,59 @@ float gndLevelThree;
 float gndLevelAvg;
 float mainDeployAlt;
 int altDrogue, altMain, altDrogueAGL, altMainAGL;
-uint8_t i = 0;
 uint8_t launch = 0;
 uint8_t drogueDeployed = 0;
 uint8_t mainDeployed = 0;
 uint8_t n = 0;  // var for end of flight counter to test if watchdog kicks in, we don't want the watchdog to reset cpu
 unsigned char values[10];
+
+struct t_mtab { char c, pat; } ;
+
+struct t_mtab morsetab[] = {
+	{'+', 42},
+	{'-', 97},
+	{'=', 49},
+	{'.', 106},
+	{',', 115},
+	{'?', 76},
+	{'/', 41},
+	{'A', 6},
+	{'B', 17},
+	{'C', 21},
+	{'D', 9},
+	{'E', 2},
+	{'F', 20},
+	{'G', 11},
+	{'H', 16},
+	{'I', 4},
+	{'J', 30},
+	{'K', 13},
+	{'L', 18},
+	{'M', 7},
+	{'N', 5},
+	{'O', 15},
+	{'P', 22},
+	{'Q', 27},
+	{'R', 10},
+	{'S', 8},
+	{'T', 3},
+	{'U', 12},
+	{'V', 24},
+	{'W', 14},
+	{'X', 25},
+	{'Y', 29},
+	{'Z', 19},
+	{'1', 62},
+	{'2', 60},
+	{'3', 56},
+	{'4', 48},
+	{'5', 32},
+	{'6', 33},
+	{'7', 35},
+	{'8', 39},
+	{'9', 47},
+	{'0', 63}
+} ;
 
 void setup()
 {
@@ -49,6 +103,7 @@ void setup()
   pinMode(DROGUE, OUTPUT);
   pinMode(MAIN, OUTPUT);
   pinMode(LEDPIN, OUTPUT);
+  //pinMode(txpin, OUTPUT);       // output for 433mhz radio signal
   
   SPI.begin();
   SPI.setDataMode(SPI_MODE3);
@@ -72,7 +127,7 @@ void setup()
   delay(500);
   gndLevelThree = currentAlt();
   delay(500);
-  for (i = 0; i <= 10; i++)
+  for (int i = 0; i <= 5; i++)
   {
     gndLevelOne = (gndLevelOne + currentAlt()) /2;
     delay(500);
@@ -128,6 +183,16 @@ void setup()
   readRegister(INT_SOURCE, 1, values);
   Serial.print("Accelerometer Ready!!\n");
   delay(500);
+  noInterrupts();           // disable all interrupts
+  TCCR1A = 0;
+  TCCR1B = 0;
+  TCNT1  = 0;
+
+  OCR1A = 31250;            // compare match register 16MHz/256/2Hz
+  TCCR1B |= (1 << WGM12);   // CTC mode
+  TCCR1B |= (1 << CS12);    // 256 prescaler
+  TIMSK1 |= (1 << OCIE1A);  // enable timer compare interrupt
+  interrupts();             // enable all interrupts
   attachInterrupt(0, takeOff, RISING);
   digitalWrite(LEDPIN, HIGH);
   Serial.println("All systems GO!! Stand by for liftoff!!\n");
@@ -137,6 +202,8 @@ void loop()
 {	
   if((!drogueDeployed) && (launch))
   {
+	TIMSK1 = 0;                // disable timer 1 interrupts
+	detachInterrupt(0);        // disable interrupts from accelerometer
     digitalWrite(LEDPIN, LOW);
     Serial.print("Launch detected\n");
     detachInterrupt(0);
@@ -157,7 +224,7 @@ void loop()
     EEPROM.write(1, lowByte(altDrogueAGL));
   }
  
-  if ((currentAlt() <= mainDeployAlt)  && (!mainDeployed)  && (drogueDeployed))
+  if ((currentAlt() <= mainDeployAlt) && (!mainDeployed) && (drogueDeployed))
   {
     digitalWrite(MAIN, HIGH);
     delay(1000);
@@ -169,7 +236,7 @@ void loop()
     Serial.println(" feet");
     altMainAGL = altMain - gndLevelAvg;
     Serial.print(altMainAGL);
-    Serial.print(" feet AGL");
+    Serial.println(" feet AGL");
     EEPROM.write(2, highByte(altMainAGL));
     EEPROM.write(3, lowByte(altMainAGL));
   }
@@ -179,8 +246,17 @@ void loop()
 	  delay(10000);
 	  n++;
 	  Serial.println(n);
+	  /*
+	  sendmsg("KG7CCY") ;
+	  delay(2500) ;
+	  */
   }
 }  // end loop()
+
+ISR(TIMER1_COMPA_vect)          // timer compare interrupt service routine
+{
+	digitalWrite(LEDPIN, digitalRead(LEDPIN) ^ 1);   // toggle LED pin
+}
 
 float currentAlt()
 {
@@ -212,4 +288,51 @@ void takeOff(void)
 {
   readRegister(INT_SOURCE, 1, values);
   launch = 1;
+}
+
+void dash()
+{
+	digitalWrite(txpin, HIGH);
+	delay(DASHLEN);
+	digitalWrite(txpin, LOW);
+	delay(DOTLEN);
+}
+
+void dit()
+{
+	digitalWrite(txpin, HIGH);
+	delay(DOTLEN);
+	digitalWrite(txpin, LOW);
+	delay(DOTLEN);
+}
+
+
+void send(char c)
+{
+	int i ;
+	if (c == ' ') {
+		delay(7*DOTLEN) ;
+		return ;
+	}
+	for (i=0; i<N_MORSE; i++) {
+		if (morsetab[i].c == c) {
+			unsigned char p = morsetab[i].pat ;
+
+			while (p != 1) {
+				if (p & 1)
+				dash() ;
+				else
+				dit() ;
+				p = p / 2 ;
+			}
+			delay(2*DOTLEN) ;
+		}
+	}
+}
+
+
+void sendmsg(char *str)
+{
+	while (*str)
+	send(*str++) ;
 }
